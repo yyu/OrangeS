@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# get
+
+
+printusage(){
+    echo "Usage:"
+    echo -e "\t`basename $0` file"
+    echo
+}
+
+if [ $# -ne 1 ]; then
+    printusage
+    exit 1
+fi
+
+out_file=$1
+
+echo -e "\0invalidated" > /tmp/invalid.hd.file
+
+dd if=/tmp/invalid.hd.file of=$out_file seek=`echo "obase=10;ibase=16;(\`egrep -e '^ROOT_BASE' ../boot/include/load.inc | sed -e 's/.*0x//g'\`+1)*200" | bc` bs=1 count=12 conv=notrunc
+
+#dd if=/tmp/invalid.hd.file of=$out_file seek=`echo "obase=10;ibase=16;(\`egrep -e '^ROOT_BASE' ../boot/include/load.inc | sed -e 's/.*0x//g'\`+\`egrep -e '#define[[:space:]]*INSTALL_START_SECT' ../include/sys/config.h | sed -e 's/.*0x//g'\`)*200" | bc` bs=1 count=12 conv=notrunc
+

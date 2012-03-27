@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# original all-in-one-line version (obsolete):
+# readelf kernel.bin -lS | awk -F " " '{if ($1 ~ /LOAD/) {limit = sprintf("%s ---- 0x%x ~ 0x%x", $0, $3, $3+$6); print limit} else {if ($4 ~ /[A-Z]*BITS/) {a = sprintf("0x%s", $5); b = sprintf("0x%s", $7); limit = sprintf("%s ---- 0x%x ~ 0x%x", $0, a, a+b); print limit} else {print $0}}}'
+
+echo
+echo "==================================== kernel info ===================================="
+echo
+
+readelf kernel.bin -lS | awk -F " " '{ \
+						if ($1 ~ /LOAD/) { \
+							limit = sprintf("%s ---- 0x%5x ~ 0x%5x", $0, $3, $3+$6); \
+							print limit\
+						} \
+						else {
+							if ($9 ~ /.*A.*/) {
+								a = sprintf("0x%s", $5); \
+								b = sprintf("0x%s", $7); \
+								limit = sprintf("%s ---- 0x%5x ~ 0x%5x", $0, a, a+b); 
+								print limit \
+							} \
+							else {
+								print $0\
+							}
+						}
+					}'
+
+echo
+echo "====================================================================================="
+echo
+
+exit 0
+

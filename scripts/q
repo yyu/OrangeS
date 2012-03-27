@@ -1,0 +1,36 @@
+#!/bin/bash
+
+bochsrc_filename=bochsrc
+if [ ! -f $bochsrc_filename ]
+then
+    echo "Bochs configuration file $bochsrc_filename not found!"
+    exit 1
+fi
+
+floppya_img_filename=`cat $bochsrc_filename | grep '^floppya' | awk -F "=|," '{print $2}'`
+hda_img_filename=`cat $bochsrc_filename | grep '^ata0-master' | awk -F "\"" '{print $2}'`
+
+echo "fd img file: "$floppya_img_filename
+echo "hd img file: "$hda_img_filename
+
+if [ ! -f $floppya_img_filename ]
+then
+    echo "Bochs floppy_a img file $floppya_img_filename not found!"
+    exit 1
+fi
+
+if [ ! -f $hda_img_filename ]
+then
+    echo "Bochs hd img file $hda_img_filename not found!"
+    exit 1
+fi
+
+echo "Orange'S @ qemu - boot from floppy"
+qemu -fda $floppya_img_filename -hda $hda_img_filename -boot a
+
+echo "finish."
+
+exit 0
+
+
+

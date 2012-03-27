@@ -1,0 +1,125 @@
+#!/bin/bash
+
+# get
+
+
+printusage(){
+    echo "Usage:"
+    echo -e "\t`basename $0` file"
+    echo
+}
+
+
+
+if [ $# -ne 1 ]; then
+    printusage
+    exit 1
+fi
+
+file_flag=-s
+
+in_file=$1
+tmp_file=/tmp/bootsect-`date +%s`-`head -c10 /dev/urandom | md5sum | head -c30`
+nr_prim_sects=`file $file_flag $in_file | awk -F ";" '{print NF}'`
+
+let "nr_prim_sects--"
+if [ $nr_prim_sects -eq 1 ]; then
+    echo "there's only one entry in MBR"
+else
+    echo $nr_prim_sects" entries in MBR"
+fi
+echo
+
+prim_idx=0
+
+file $file_flag $in_file | awk -F ";" '{for(i=2;i<=NF;i++) print $i}' |
+while read line
+do
+    let "prim_idx++"
+    #echo $line
+    # primary partition
+    start_sect=`echo $line | sed 's/^.*startsector[[:space:]]*//g' | awk -F "[ ,]" '{print $1}'`
+    size_in_sects=`echo $line | sed 's/^.*startsector[[:space:]]*//g' | awk -F "[ ,]" '{print $3}'`
+    ext_part=`echo $line | awk -F "[=,]" '{print $2}'`
+    u=MB
+    let "base = $start_sect * 512"
+    let "size = $size_in_sects * 512 / (1024 * 1024)"
+    if [ $size -gt 1024 ]; then
+	let "size /= 1024"
+	u=GB
+    fi
+    #echo $ext_part
+    if [ $ext_part != "0x5" ]; then
+	echo "primary  partition base: "$base" (start-sect:0x"`echo "obase=16;ibase=10;$start_sect" | bc`", byte-off:0x"`echo "obase=16;ibase=10;$base" | bc`")"" [hd"$prim_idx"]"
+	echo "                   size: "$size" "$u" (0x"`echo "obase=16;ibase=10;$size_in_sects;" | bc`" sects)"
+	echo
+    else
+	ext_idx=0
+	# extended partition
+	echo "extended partition base: "$base" (start-sect:0x"`echo "obase=16;ibase=10;$start_sect" | bc`", byte-off:0x"`echo "obase=16;ibase=10;$base" | bc`")"" [hd"$prim_idx"]"
+	echo "                   size: "$size" "$u" (0x"`echo "obase=16;ibase=10;$size_in_sects;" | bc`" sects)"
+	echo
+	ext_start=$start_sect
+	cur_ext_start=$ext_start
+	#echo $cur_ext_start
+	should_break=
+	while true
+	do
+	    if [ -n "$should_break" ]; then
+		break
+	    fi
+
+	    flag=nothing
+	    let "ext_idx++"
+
+	    #echo " reading ---- "$cur_ext_start
+	    dd if=$in_file of=$tmp_file skip=$cur_ext_start bs=512 count=1 2> /tmp/dd.log
+	    for x in $(file $file_flag $tmp_file | sed 's/[,\(\)=]/ /g')
+	    do
+		#echo "cur_ext_start:"$cur_ext_start", flag:"$flag", x:"$x", start_sect:"$start_sect
+		if [ $flag == "ID" ]; then
+		    if [ $x == "0x5" ]; then # extended
+			is_ext=1
+		    else
+			is_ext=
+		    fi
+		    flag=nothing
+		elif [ $flag == "startsector" ]; then
+		    sect_off=$x
+		    let "start_sect = $cur_ext_start + $sect_off"
+		    if [ -z "$is_ext" ]; then
+			let "base = $start_sect * 512"
+			num_alpha_map=( - a b c d e f g h i j k l m n o p q r s t u v x y z )
+			echo "  - logical partition base: "$base" (start-sect:0x"`echo "obase=16;ibase=10;$start_sect" | bc`", byte-off:0x"`echo "obase=16;ibase=10;$base" | bc`") [hd"$prim_idx${num_alpha_map[$ext_idx]}"]"
+		    else
+			let "cur_ext_start = $ext_start+$sect_off"
+		    fi
+		    flag=size_in_sects
+		elif [ $flag == "size_in_sects" ]; then
+		    if [ -z "$is_ext" ]; then
+			u=MB
+			let "size = $x * 512 / (1024 * 1024)"
+			if [ $size -gt 1024 ]; then
+			    let "size /= 1024"
+			    u=GB
+			fi
+			echo "                      size: "$size" "$u" (0x"`echo "obase=16;ibase=10;$x;" | bc`" sects)"
+			echo
+		    fi
+		    flag=nothing
+		elif [ $flag == "last" ]; then
+		    should_break=1
+		    echo "THE END"
+		    break
+		else
+		    flag=$x
+		fi
+	    done
+	done
+    fi
+done
+
+
+echo
+
+exit 0

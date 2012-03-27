@@ -1,0 +1,39 @@
+#!/bin/bash
+
+printusage(){
+    echo "Usage:"
+    echo -e "\t`basename $0` img-file grub-stage1 grub-stage2"
+    echo
+}
+
+
+if [ $# -ne 3 ]; then
+    printusage
+    exit 1
+fi
+
+
+img_file=$1
+stage1=$2
+stage2=$3
+
+# dd if=/usr/local/src/grub-0.97/stage1/stage1 of=50m.img bs=1 count=446 conv=notrunc
+# dd if=/usr/local/src/grub-0.97/stage2/stage2 of=50m.img bs=512 seek=1 conv=notrunc
+
+dd if=$stage1 of=$img_file bs=1 count=446 conv=notrunc
+dd if=$stage2 of=$img_file bs=512 seek=1 conv=notrunc
+
+# cmd1="dd if=$stage1 of=$img_file bs=512 count=1 conv=notrunc"
+# cmd2="dd if=$stage2 of=$img_file bs=512 seek=1 conv=notrunc"
+
+# for cmd in cmd1 cmd2
+# do
+#     c=`echo $cmd`
+#     echo $c
+#     #`echo $c`
+# done
+
+echo
+
+exit 0
+

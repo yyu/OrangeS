@@ -1,0 +1,6 @@
+#!/bin/bash
+
+svn status | sed -e '/\(mkdep\|bin\|cache\|cscope\|img\)/d'
+
+exit 0
+

@@ -1,0 +1,117 @@
+#!/bin/bash
+
+#################################################################################################################
+# Usage:
+#        ./prntdisk
+# Note:
+#	 dump some sectors of the disk image
+#
+# BUGS:
+#                                                                                                 Forrest Y. Yu
+#                                                                                                 Apr. 14, 2008
+#################################################################################################################
+
+ROOT_BASE=4EFF
+SUPER_BLK_BASE=4F00
+NR_IMAP_SECTS=1
+NR_SMAP_SECTS=A
+N1ST_SECT=10D
+
+HD_IMG_FILE=80m.img
+
+# Bochs hd image file
+img_filename=$HD_IMG_FILE
+if [ -f $img_filename ]; then
+    echo
+    echo "Bochs hd image file: "$img_filename""
+    echo
+else
+    echo "$img_filename is not found."
+    exit 1
+fi
+
+
+# # Bohs snapshot file
+# snapshot_filename=snapshot.txt
+# if [ ! -f $snapshot_filename ]
+# then
+#     echo "Bochs snapshot file $snapshot_filename not found!"
+#     exit 1
+# fi
+
+# Offsets
+boot_sector_offset=0x`echo "obase=16;ibase=16;$ROOT_BASE*200;" | sed 's/0x//g' | bc`
+echo "boot_sector_offset="$boot_sector_offset
+super_block_offset=0x`echo "obase=16;ibase=16;$SUPER_BLK_BASE*200;" | sed 's/0x//g' | bc`
+echo "super_block_offset="$super_block_offset
+inode_map_offset=0x`echo "obase=16;ibase=16;($SUPER_BLK_BASE+1)*200;" | sed 's/0x//g' | bc`
+echo "inode_map_offset="$inode_map_offset
+sector_map_offset=0x`echo "obase=16;ibase=16;($SUPER_BLK_BASE+1+$NR_IMAP_SECTS)*200;" | sed 's/0x//g' | bc`
+echo "sector_map_offset="$sector_map_offset
+inodes_offset=0x`echo "obase=16;ibase=16;($SUPER_BLK_BASE+1+$NR_IMAP_SECTS+$NR_SMAP_SECTS)*200;" | sed 's/0x//g' | bc`
+echo "inodes_offset="$inodes_offset
+first_sector_offset=0x`echo "obase=16;ibase=16;($ROOT_BASE+$N1ST_SECT)*200;" | sed 's/0x//g' | bc`
+echo "first_sector_offset="$first_sector_offset
+
+
+#__offset_01=0x10DA000
+#__offset_01=0xB01800
+__offset_01=0x9E1600
+__offset_02=0x1C88000
+__offset_03=0xF01800
+
+# dump the secoters
+echo
+echo "[boot sector]"
+echo "-------- ----------- =========== ----------- =========== ----------- =========== ----------- ==========="
+#od -A x -t x1 $img_filename -N 512 -j $boot_sector_offset
+xxd -u -a -g 1 -c 32 -s +$boot_sector_offset -l 512 $img_filename
+
+echo
+echo "[super block]"
+echo "-------- ----------- =========== ----------- =========== ----------- =========== ----------- ==========="
+#echo "-------- -------- ======== -------- ======== -------- ======== -------- ========"
+#od -A x -t x1 $img_filename -N 512 -j $super_block_offset
+xxd -u -a -g 1 -c 32 -s +$super_block_offset -l 512 $img_filename
+
+echo
+echo "[inode map]"
+echo "-------- ----------- =========== ----------- =========== ----------- =========== ----------- ==========="
+#od -A x -t x1 $img_filename -N 512 -j $inode_map_offset
+xxd -u -a -g 1 -c 32 -s +$inode_map_offset -l 512 $img_filename
+
+echo
+echo "[sector map]"
+echo "-------- ----------- =========== ----------- =========== ----------- =========== ----------- ==========="
+#od -A x -t x1 $img_filename -N 512 -j $sector_map_offset
+xxd -u -a -g 1 -c 32 -s +$sector_map_offset -l 5120 $img_filename
+
+echo
+echo "[inodes]"
+echo "-------- ----------- =========== ----------- =========== ----------- =========== ----------- ==========="
+#od -A x -t x1 $img_filename -N 512 -j $inodes_offset
+xxd -u -a -g 1 -c 32 -s +$inodes_offset -l 1024 $img_filename
+
+echo
+echo "[1st sector]"
+echo "-------- ----------- =========== ----------- ==========="
+#od -A x -t x1 $img_filename -N 512 -j $first_sector_offset
+xxd -u -a -g 1 -c 16 -s +$first_sector_offset -l 1024 $img_filename
+
+# echo
+# echo "[extra sector 01]"
+# echo "-------- ----------- =========== ----------- =========== ----------- =========== ----------- ==========="
+# xxd -u -a -g 1 -c 32 -s +$__offset_01 -l 512 $img_filename
+
+# echo
+# echo "[extra sector 02]"
+# echo "-------- ----------- =========== ----------- =========== ----------- =========== ----------- ==========="
+# xxd -u -a -g 1 -c 32 -s +$__offset_02 -l 4096 $img_filename
+
+# echo
+# echo "[extra sector 03]"
+# echo "-------- ----------- =========== ----------- =========== ----------- =========== ----------- ==========="
+# xxd -u -a -g 1 -c 32 -s +$__offset_03 -l 16384 $img_filename
+
+exit 0
+

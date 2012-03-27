@@ -1,0 +1,122 @@
+#!/bin/bash
+
+#set -v on
+#set -x on
+
+
+loader_bin_size_hex="0x?"
+loader_bin_limit="0x?"
+kernel_bin_size_hex="0x?"
+kernel_bin_limit="0x?"
+kernel_limit="0x?"
+if [ -f "boot/loader.bin" ]; then
+    loader_bin_size=`ls -l boot/loader.bin | awk -F " " '{print $5}'`
+    loader_bin_size_hex=0x`echo "obase=16;ibase=10;$loader_bin_size;" | bc`
+    loader_bin_limit=0x`echo "obase=16;ibase=16;\`echo $LOADER_PHY_ADDR+$loader_bin_size_hex | sed 's/0x//g'\`;"`
+    loader_bin_limit=0x`echo "obase=16;ibase=16;\`echo $LOADER_PHY_ADDR+$loader_bin_size_hex | sed 's/0x//g'\`;" | bc`
+fi
+
+if [ -f $KERNEL_FILE ]; then
+    kernel_bin_size=`ls -l $KERNEL_FILE | awk -F " " '{print $5}'`
+    kernel_bin_size_hex=0x`echo "obase=16;ibase=10;$kernel_bin_size;" | bc`
+    kernel_bin_limit=0x`echo "obase=16;ibase=16;\`echo $KERNEL_FILE_PHY_ADDR+$kernel_bin_size_hex | sed 's/0x//g'\`;"`
+    kernel_bin_limit=0x`echo "obase=16;ibase=16;\`echo $KERNEL_FILE_PHY_ADDR+$kernel_bin_size_hex | sed 's/0x//g'\`;" | bc`
+
+    if [ -f "$SCRIPTS_PATH/kinfo" ]; then
+	kernel_limit=0x`$SCRIPTS_PATH/kinfo | grep -e "^[[:space:]].*\[.*----" | awk -F "~" '{print $NF}' | sed 's/0x\ /0x0/g' | sort | tail -n 1 | sed 's/^[[:space:]]*0x//g' | tr '[:lower:]' '[:upper:]'`
+    fi
+fi
+
+# echo "loader_bin_size_hex="$loader_bin_size_hex
+# echo "loader_bin_limit="$loader_bin_limit
+# echo "kernel_bin_size_hex="$kernel_bin_size_hex
+# echo "kernel_bin_limit="$kernel_bin_limit
+# echo "kernel_limit="$kernel_limit
+
+echo #>> $SYS_INFO_FILE
+echo "memory illustration:" #>> $SYS_INFO_FILE
+echo "=====================================================================================" #>> $SYS_INFO_FILE
+echo #>> $SYS_INFO_FILE
+(
+    echo $MEM_SIZE_B"h"$MEM_SIZE_MB"h" | sed 's/0x//g' | awk -F "h" '{a=sprintf("%8s", $1); print "@@FFFFFFFFh@@"a"h +-------------------------------------------+  MemSize: "$2" MB"}'
+    echo "@@FFFFFFFEh@@""          |                                           |"
+    echo "@@FFFFFFFDh@@""          |                      .                    |"
+    echo "@@FFFFFFFCh@@""          :                      .                    :"
+    echo "@@FFFFFFFBh@@""          :                      .                    :"
+    #echo "@@FFFFFFFAh@@""          :                                           :"
+    # Page Table
+    echo "obase=16;ibase=16;$PAGE_TBL_LIMIT+2;" | sed 's/0x//g' | bc | awk '{b = sprintf("%8s", $0); gsub(" ",0,b); print "@@"b"h@@""          :                                           :"}'
+    echo "obase=16;ibase=16;$PAGE_TBL_LIMIT+1;" | sed 's/0x//g' | bc | awk '{a=sprintf("%8s", $0); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h +-------------------------------------------+"}'
+    echo $PAGE_TBL_LIMIT | sed 's/0x//g' | awk '{a=sprintf("%8s", $0); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h | *                                       * |"}'
+    echo "obase=16;ibase=16;$PAGE_TBL_LIMIT-1;" | sed 's/0x//g' | bc | awk '{b = sprintf("%8s", $0); gsub(" ",0,b); print "@@"b"h@@""          :                                           :"}'
+    echo "obase=16;ibase=16;$PAGE_TBL_BASE+1;" | sed 's/0x//g' | bc | awk '{b = sprintf("%8s", $0); gsub(" ",0,b); print "@@"b"h@@""          | *                                       * |"}'
+    echo $PAGE_TBL_BASE"h"$PAGE_TBL_SIZE"h"$PAGE_TBL_LIMIT_ | sed 's/0x//g' | awk -F "h" '{a=sprintf("%8s", $1); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h | *               Page Tables             * | "a"h ~ "$3"h (size:"$2"h)"}'
+    echo "obase=16;ibase=16;$PAGE_TBL_BASE-1;" | sed 's/0x//g' | bc | awk '{a=sprintf("%8s", $0); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h +-------------------------------------------+"}'
+    # Page Directory Table
+    echo "obase=16;ibase=16;$PAGE_DIR_BASE+1;" | sed 's/0x//g' | bc | awk '{b = sprintf("%8s", $0); gsub(" ",0,b); print "@@"b"h@@""          | *                                       * |"}'
+    echo $PAGE_DIR_BASE | sed 's/0x//g' | awk '{a=sprintf("%8s", $0); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h | *           Page Directory Table        * |"}'
+    echo "obase=16;ibase=16;$PAGE_DIR_BASE-1;" | sed 's/0x//g' | bc | awk '{a=sprintf("%8s", $0); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h +-------------------------------------------+"}'
+
+    # System ROM
+    echo "@@000FFFFEh@@""          |                                           |"
+    echo "@@000F0000h@@""   F0000h |                 System ROM                |"
+    # Expansion of system ROM
+    echo "@@000EFFFFh@@""          |                                           |"
+    echo "@@000E0000h@@""   E0000h |          Expansion of system ROM          |"
+    # Reserved from ROM expansion
+    echo "@@000DFFFFh@@""          |                                           |"
+    echo "@@000C0000h@@""   C0000h |         Reserved for ROM expansion        |"
+    # Display adapter reserved
+    echo "@@000BFFFFh@@""          |                                           |"
+    echo "@@000A0000h@@""   A0000h |          Display adapter reserved         |"
+    # extended BIOS data area (EBDA)
+    echo "@@0009FFFFh@@""          |                                           |"
+    echo "@@0009FC00h@@""   9FC00h |       extended BIOS data area (EBDA)      |"
+    echo "@@0009FBFFh@@""   9FBFFh +-------------------------------------------+"
+    # loader.bin
+    echo "obase=16;ibase=16;$LOADER_PHY_ADDR+1;" | sed 's/0x//g' | bc | awk '{b = sprintf("%8s", $0); gsub(" ",0,b); print "@@"b"h@@""          | *                                       * |"}'
+    echo $LOADER_PHY_ADDR"h"$loader_bin_size_hex"h"$loader_bin_limit | sed 's/0x//g' | awk -F "h" '{a=sprintf("%8s", $1); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h | *               LOADER.BIN              * | "a"h ~ "$3"h (size:"$2"h)"}'
+    echo "obase=16;ibase=16;$LOADER_PHY_ADDR-1;" | sed 's/0x//g' | bc | awk -F "h" '{a=sprintf("%8s", $1); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h +-------------------------------------------+"}'
+    # kernel.bin
+    echo "obase=16;ibase=16;$KERNEL_FILE_PHY_ADDR+1;" | sed 's/0x//g' | bc | awk '{b = sprintf("%8s", $0); gsub(" ",0,b); print "@@"b"h@@""          | *                                       * |"}'
+    echo $KERNEL_FILE_PHY_ADDR"h"$kernel_bin_size_hex"h"$kernel_bin_limit | sed 's/0x//g' | awk -F "h" '{a=sprintf("%8s", $1); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h | *               KERNEL.BIN              * | "a"h ~ "$3"h (size:"$2"h)"}'
+    echo "obase=16;ibase=16;$KERNEL_FILE_PHY_ADDR-1;" | sed 's/0x//g' | bc | awk '{a=sprintf("%8s", $0); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h +-------------------------------------------+"}'
+    # kernel
+
+    echo "@@00007C01@@""          :                                           :"
+    echo "@@00007C00h@@""    7C00h | *                                       * |   (BOOT SECTOR : OK to overwrite)"
+    echo "@@00007BFFh@@""          :                                           :"
+
+    echo "obase=16;ibase=16;$KRNL_ENT_PT_PHY_ADDR+2;" | sed 's/0x//g' | bc | awk '{b = sprintf("%8s", $0); gsub(" ",0,b); print "@@"b"h@@""          :                                           :"}'
+    echo "obase=16;ibase=16;$KRNL_ENT_PT_PHY_ADDR+1;" | sed 's/0x//g' | bc | awk '{b = sprintf("%8s", $0); gsub(" ",0,b); print "@@"b"h@@""          | *                                       * |"}'
+    echo $KRNL_ENT_PT_PHY_ADDR"h"$kernel_limit | sed 's/0x//g' | awk -F "h" '{a=sprintf("%8s", $1); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h | *                 KERNEL                * | "a"h ~ "$2"h"}'
+    echo "obase=16;ibase=16;$KRNL_ENT_PT_PHY_ADDR-1;" | sed 's/0x//g' | bc | awk '{a=sprintf("%8s", $1); b=a; gsub(" ",0,b); print "@@"b"h@@"a"h +-------------------------------------------+"}'
+
+    echo "@@00000500h@@""          :                                           :"
+    echo "@@000004FFh@@""     4FFh +-------------------------------------------+"
+
+    echo "@@00000401h@@""          |                                           |"
+    echo "@@00000400h@@""     400h |           ROM BIOS parameter area         |"
+    echo "@@000003FFh@@""     3FFh +-------------------------------------------+"
+
+    echo "@@00000002h@@""          |                                           |"
+    echo "@@00000001h@@""       0h |                 Int Vectors               |"
+    echo "@@00000000h@@""          +-------------------------------------------+"
+) | sort -r | sed 's/@@.*@@/\t/g' #>> $SYS_INFO_FILE
+
+echo #>> $SYS_INFO_FILE
+echo "=====================================================================================" #>> $SYS_INFO_FILE
+# echo >> $SYS_INFO_FILE
+
+# echo
+# cat $SYS_INFO_FILE
+# echo
+
+echo
+
+rm -f $tmp_file
+
+#set -v off
+#set -x off
+
+exit 0

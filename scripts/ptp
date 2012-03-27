@@ -1,0 +1,281 @@
+#!/bin/bash
+
+#######################
+# a sample input-file #
+#######################
+#
+# <bochs:8> x /40xw 0x59ba0+0x194*0	← 其中 0x59ba0 为 &proc_table[0]，0x194 为 sizeof(proc_table[0])	⎫
+#             ~~↖~ ~~~~~~↖~~~~~~~										⎮
+#                 ↖        必需按此格式写：&proc_table[0]+sizeof(proc_table[0])*i，式子中间不能有空格		⎬ 对 bochs 命令的要求
+#                   ↖												⎮
+#                     数字 40 可以大一些，但不能比 40 再小了；‘xw’两个字母不能改				⎭                        
+# [bochs]:
+# 0x00059ba0 <bogus+       0>:    0x00000019      0x0000000d      0x0000000d      0x0000000d
+# 0x00059bb0 <bogus+      16>:    0x00000000      0x0003f388      0x0005794c      0x00059bd0
+# 0x00059bc0 <bogus+      32>:    0x00000001      0x00057973      0x00000003      0x00000001
+# 0x00059bd0 <bogus+      48>:    0x000014a8      0x00001503      0x00000005      0x00001297
+# 0x00059be0 <bogus+      64>:    0x00057930      0x0000000d      0xffff0028      0xb8000000
+# 0x00059bf0 <bogus+      80>:    0xffff00cf      0xb3000000      0xee0500cf      0x000fffff
+# 0x00059c00 <bogus+      96>:    0x00000000      0x54540000      0x00000059      0x00000000
+# 0x00059c10 <bogus+     112>:    0x00000000      0x00000000      0x00000002      0x00057973	⎫
+#                                                                 ~~↑~~~~~~      ~~↑~~~~~~  	⎮
+#                                                                   p_flags         p_msg   	⎮			 
+# 0x00059c20 <bogus+     128>:    0x0000002f      0x00000003      0x00000001      0x00000000	⎮
+#                                 ~~↑~~~~~~      ~~↑~~~~~~      ~~↑~~~~~~      ~~↑~~~~~~	⎬ 这些值以及相应偏移如果改变，那下面的程序也要相应修改
+#                                   p_recvfrom      p_sendto        has_int_msg     q_sending	⎮
+# 0x00059c30 <bogus+     144>:    0x00000000      0x00000000      0x00000000      0x00000000	⎮
+#                                 ~~↑~~~~~~							⎮
+#                                   next_sending   						⎭
+# <bochs:9> x /40xw 0x59ba0+0x194*1
+# [bochs]:
+# 0x00059d34 <bogus+       0>:    0x00000019      0x0000000d      0x0000000d      0x0000000d
+# 0x00059d44 <bogus+      16>:    0x00000000      0x00000000      0x0004f9bc      0x00059d64
+# 0x00059d54 <bogus+      32>:    0x00000002      0x0004f9e8      0x0000002f      0x00000000
+# 0x00059d64 <bogus+      48>:    0x000014a8      0x00001503      0x00000005      0x00001246
+# 0x00059d74 <bogus+      64>:    0x0004f9a0      0x0000000d      0xffff0030      0xb8000000
+# 0x00059d84 <bogus+      80>:    0xffff00cf      0xb3000000      0x000600cf      0x000f0000
+# 0x00059d94 <bogus+      96>:    0x00010000      0x59530000      0x00000053      0x00000000
+# 0x00059da4 <bogus+     112>:    0x00000000      0x00000000      0x00000004      0x0004f9e8
+# 0x00059db4 <bogus+     128>:    0x0000002f      0x00000000      0x00000000      0x00000000
+# 0x00059dc4 <bogus+     144>:    0x00000000      0x00000000      0x00000000      0x00000000
+# <bochs:10> x /40xw 0x59ba0+0x194*2
+# [bochs]:
+# 0x00059ec8 <bogus+       0>:    0x00000019      0x0000000d      0x0000000d      0x0000000d
+# 0x00059ed8 <bogus+      16>:    0x0000e920      0x00000000      0x000479bc      0x00059ef8
+# 0x00059ee8 <bogus+      32>:    0x00000002      0x000479e8      0x0000002f      0x00000000
+# 0x00059ef8 <bogus+      48>:    0x000014a8      0x00001503      0x00000005      0x00001246
+# 0x00059f08 <bogus+      64>:    0x000479a0      0x0000000d      0xffff0038      0xb8000000
+# 0x00059f18 <bogus+      80>:    0xffff00cf      0xb3000000      0x000300cf      0x000f0000
+# 0x00059f28 <bogus+      96>:    0x00020000      0x49570000      0x4548434e      0x52455453
+# 0x00059f38 <bogus+     112>:    0x00000000      0x00000000      0x00000004      0x000479e8
+# 0x00059f48 <bogus+     128>:    0x0000002f      0x00000039      0x00000000      0x00000000
+# 0x00059f58 <bogus+     144>:    0x00000000      0x00000000      0x00000000      0x00000000
+# <bochs:11> x /40xw 0x59ba0+0x194*3
+# [bochs]:
+# 0x0005a05c <bogus+       0>:    0x00000019      0x0000000d      0x0000000d      0x0000000d
+# 0x0005a06c <bogus+      16>:    0x00000000      0x00000000      0x0003f71d      0x0005a08c
+# 0x0005a07c <bogus+      32>:    0x00000001      0x0003f73d      0x00000032      0x00000000
+# 0x0005a08c <bogus+      48>:    0x000014a8      0x00001503      0x00000005      0x00001246
+# 0x0005a09c <bogus+      64>:    0x0003f701      0x0000000d      0xffff0040      0xb8000000
+# 0x0005a0ac <bogus+      80>:    0xffff00cf      0xb3000000      0xf2f800cf      0x000fffff
+# 0x0005a0bc <bogus+      96>:    0x00030000      0x53460000      0x00000000      0x00000000
+# 0x0005a0cc <bogus+     112>:    0x00000000      0x00000000      0x00000002      0x0003f73d
+# 0x0005a0dc <bogus+     128>:    0x00000000      0x00000032      0x00000000      0x00059ba0
+# 0x0005a0ec <bogus+     144>:    0x00000000      0x00000000      0x00000000      0x00000000
+# <bochs:12> x /40xw 0x59ba0+0x194*4
+# [bochs]:
+# 0x0005a1f0 <bogus+       0>:    0x00000019      0x0000000d      0x0000000d      0x0000000d
+# 0x0005a200 <bogus+      16>:    0x0005a3ef      0x0000a1a0      0x000374fc      0x0005a220
+# 0x0005a210 <bogus+      32>:    0x00000002      0x0003751c      0x00000003      0x00000000
+# 0x0005a220 <bogus+      48>:    0x000014a8      0x00001503      0x00000005      0x00001246
+# 0x0005a230 <bogus+      64>:    0x000374e0      0x0000000d      0xffff0048      0xb8000000
+# 0x0005a240 <bogus+      80>:    0xffff00cf      0xb3000000      0x000400cf      0x000f0000
+# 0x0005a250 <bogus+      96>:    0x00040000      0x4d4d0000      0x00000000      0x00000000
+# 0x0005a260 <bogus+     112>:    0x00000000      0x00000000      0x00000004      0x0003751c
+# 0x0005a270 <bogus+     128>:    0x00000003      0x00000000      0x00000000      0x00000000
+# 0x0005a280 <bogus+     144>:    0x00000000      0x00000000      0x00000000      0x00000000
+# <bochs:13> x /40xw 0x59ba0+0x194*5
+# [bochs]:
+# 0x0005a384 <bogus+       0>:    0x0000001b      0x0000000f      0x0000000f      0x0000000f
+# 0x0005a394 <bogus+      16>:    0x00000000      0x000097c7      0x0002f8ec      0x0005a3b4
+# 0x0005a3a4 <bogus+      32>:    0x00000002      0x0002f90c      0x00000004      0x00000000
+# 0x0005a3b4 <bogus+      48>:    0x000014a8      0x00001503      0x00000007      0x00000246
+# 0x0005a3c4 <bogus+      64>:    0x0002f8d0      0x0000000f      0xffff0050      0xf8000000
+# 0x0005a3d4 <bogus+      80>:    0xffff00cf      0xf3000000      0x000500cf      0x00050000
+# 0x0005a3e4 <bogus+      96>:    0x00050000      0x4e490000      0x305f5449      0x00000000
+# 0x0005a3f4 <bogus+     112>:    0x00000000      0x00000000      0x00000004      0x0002f90c
+# 0x0005a404 <bogus+     128>:    0x00000004      0x00000039      0x00000000      0x00000000
+# 0x0005a414 <bogus+     144>:    0x00000000      0x00058ba0      0x00058be0      0x00000000
+# <bochs:14> x /40xw 0x59ba0+0x194*6
+# [bochs]:
+# 0x0005a518 <bogus+       0>:    0x0000001b      0x0000000f      0x0000000f      0x0000000f
+# 0x0005a528 <bogus+      16>:    0x00000000      0x0000980b      0x000278ec      0x0005a548
+# 0x0005a538 <bogus+      32>:    0x00000002      0x0002790c      0x00000003      0x00000000
+# 0x0005a548 <bogus+      48>:    0x000014a8      0x00001503      0x00000007      0x00000246
+# 0x0005a558 <bogus+      64>:    0x000278d0      0x0000000f      0xffff0058      0xf8000000
+# 0x0005a568 <bogus+      80>:    0xffff00cf      0xf3000000      0x000400cf      0x00050000
+# 0x0005a578 <bogus+      96>:    0x00060000      0x65540000      0x00417473      0x00000000
+# 0x0005a588 <bogus+     112>:    0x00000000      0x00000000      0x00000004      0x0002790c
+# 0x0005a598 <bogus+     128>:    0x00000003      0x00000039      0x00000000      0x00000000
+# 0x0005a5a8 <bogus+     144>:    0x00000000      0x00058bb0      0x00058bf0      0x00000000
+# <bochs:15> x /40xw 0x59ba0+0x194*7
+# [bochs]:
+# 0x0005a6ac <bogus+       0>:    0x0000001b      0x0000000f      0x0000000f      0x0000000f
+# 0x0005a6bc <bogus+      16>:    0x00000000      0x00009845      0x0001f86c      0x0005a6dc
+# 0x0005a6cc <bogus+      32>:    0x00000002      0x0001f88c      0x00000003      0x00000000
+# 0x0005a6dc <bogus+      48>:    0x000014a8      0x00001503      0x00000007      0x00000246
+# 0x0005a6ec <bogus+      64>:    0x0001f850      0x0000000f      0xffff0060      0xf8000000
+# 0x0005a6fc <bogus+      80>:    0xffff00cf      0xf3000000      0x000500cf      0x00050000
+# 0x0005a70c <bogus+      96>:    0x00070000      0x65540000      0x00427473      0x00000000
+# 0x0005a71c <bogus+     112>:    0x00000000      0x00000000      0x00000004      0x0001f88c
+# 0x0005a72c <bogus+     128>:    0x00000003      0x00000039      0x00000000      0x00000000
+# 0x0005a73c <bogus+     144>:    0x00000000      0x00058bc0      0x00058c00      0x00000000
+# <bochs:16> x /40xw 0x59ba0+0x194*8
+# [bochs]:
+# 0x0005a840 <bogus+       0>:    0x0000001b      0x0000000f      0x0000000f      0x0000000f
+# 0x0005a850 <bogus+      16>:    0x00000000      0x00009877      0x0001746c      0x0005a870
+# 0x0005a860 <bogus+      32>:    0x00000002      0x0001748c      0x00000003      0x00000000
+# 0x0005a870 <bogus+      48>:    0x000014a8      0x00001503      0x00000007      0x00000246
+# 0x0005a880 <bogus+      64>:    0x00017450      0x0000000f      0xffff0068      0xf8000000
+# 0x0005a890 <bogus+      80>:    0xffff00cf      0xf3000000      0x000400cf      0x00050000
+# 0x0005a8a0 <bogus+      96>:    0x00080000      0x65540000      0x00437473      0x00000000
+# 0x0005a8b0 <bogus+     112>:    0x00000000      0x00000000      0x00000004      0x0001748c
+# 0x0005a8c0 <bogus+     128>:    0x00000003      0x00000039      0x00000000      0x00000000
+# 0x0005a8d0 <bogus+     144>:    0x00000000      0x00058bd0      0x00058c10      0x00000000
+# <bochs:17> x /40xw 0x59ba0+0x194*9
+# [bochs]:
+# 0x0005a9d4 <bogus+       0>:    0x00000000      0x00000000      0x00000000      0x00000000
+# 0x0005a9e4 <bogus+      16>:    0x00000000      0x00000000      0x00000000      0x00000000
+# 0x0005a9f4 <bogus+      32>:    0x00000000      0x00000000      0x00000000      0x00000000
+# 0x0005aa04 <bogus+      48>:    0x00000000      0x00000000      0x00000000      0x00000000
+# 0x0005aa14 <bogus+      64>:    0x00000000      0x00000000      0xffff0070      0xf8800000
+# 0x0005aa24 <bogus+      80>:    0xffff004f      0xf2800000      0x0000004f      0x00000000
+# 0x0005aa34 <bogus+      96>:    0x00000000      0x00000000      0x00000000      0x00000000
+# 0x0005aa44 <bogus+     112>:    0x00000000      0x00000000      0x00000010      0x00000000
+# 0x0005aa54 <bogus+     128>:    0x00000000      0x00000000      0x00000000      0x00000000
+# 0x0005aa64 <bogus+     144>:    0x00000000      0x00000000      0x00000000      0x00000000
+# <bochs:18>
+
+
+echo
+
+
+sep="\""
+proc_name[0]=`cat /home/forrest/local/src/tinix/chapter8/a/kernel/global.c | grep -e "{.*STACK_SIZE" -m 1 | tail -n 1 | awk -F "$sep" '{print $2}'`
+proc_name[1]=`cat /home/forrest/local/src/tinix/chapter8/a/kernel/global.c | grep -e "{.*STACK_SIZE" -m 2 | tail -n 1 | awk -F "$sep" '{print $2}'`
+proc_name[2]=`cat /home/forrest/local/src/tinix/chapter8/a/kernel/global.c | grep -e "{.*STACK_SIZE" -m 3 | tail -n 1 | awk -F "$sep" '{print $2}'`
+proc_name[3]=`cat /home/forrest/local/src/tinix/chapter8/a/kernel/global.c | grep -e "{.*STACK_SIZE" -m 4 | tail -n 1 | awk -F "$sep" '{print $2}'`
+proc_name[4]=`cat /home/forrest/local/src/tinix/chapter8/a/kernel/global.c | grep -e "{.*STACK_SIZE" -m 5 | tail -n 1 | awk -F "$sep" '{print $2}'`
+proc_name[5]=`cat /home/forrest/local/src/tinix/chapter8/a/kernel/global.c | grep -e "{.*STACK_SIZE" -m 6 | tail -n 1 | awk -F "$sep" '{print $2}'`
+proc_name[6]=`cat /home/forrest/local/src/tinix/chapter8/a/kernel/global.c | grep -e "{.*STACK_SIZE" -m 7 | tail -n 1 | awk -F "$sep" '{print $2}'`
+proc_name[7]=`cat /home/forrest/local/src/tinix/chapter8/a/kernel/global.c | grep -e "{.*STACK_SIZE" -m 8 | tail -n 1 | awk -F "$sep" '{print $2}'`
+proc_name[8]=`cat /home/forrest/local/src/tinix/chapter8/a/kernel/global.c | grep -e "{.*STACK_SIZE" -m 9 | tail -n 1 | awk -F "$sep" '{print $2}'`
+proc_name[9]=`cat /home/forrest/local/src/tinix/chapter8/a/kernel/global.c | grep -e "{.*STACK_SIZE" -m 10 | tail -n 1 | awk -F "$sep" '{print $2}'`
+
+
+NR_TASKS=`cat /home/forrest/local/src/tinix/chapter8/a/include/OrangeS/proc.h | grep -e "#define[[:space:]]*NR_TASKS" | awk -F "[ \t]*" '{print $3}'`
+NR_PROCS=`cat /home/forrest/local/src/tinix/chapter8/a/include/OrangeS/proc.h | grep -e "#define[[:space:]]*NR_PROCS" | awk -F "[ \t]*" '{print $3}'`
+DELTA_ANY=`cat /home/forrest/local/src/tinix/chapter8/a/include/OrangeS/const.h | grep -e "#define[[:space:]]*ANY[[:space:]]*(" | awk -F "[ \t)]*" '{print $7}'`
+DELTA_NO_TASK=`cat /home/forrest/local/src/tinix/chapter8/a/include/OrangeS/const.h | grep -e "#define[[:space:]]*NO_TASK[[:space:]]*(" | awk -F "[ \t)]*" '{print $7}'`
+ANY=`echo "obase=16;ibase=10;$NR_TASKS+$NR_PROCS+$DELTA_ANY" | bc`
+
+NO_TASK=`echo "obase=16;ibase=10;$NR_TASKS+$NR_PROCS+$DELTA_NO_TASK" | bc`
+
+echo "0x"$ANY": ANY"
+echo "0x"$NO_TASK": NO_TASK"
+
+# initialize arrays: proc_table_addr[], addr_proc_map[]
+while read line
+do
+    TITLE_LINE=`echo $line | grep -e "<bochs"`
+    BLAH_LINE=`echo $line | grep -e "bogus+[[:space:]]*112"`
+
+    if [ -n "$TITLE_LINE" ]; then
+	line_nr=`echo $line | awk -F "[ +\*]" '{print $6}'`
+	proc_table_addr[$line_nr]=`(echo "obase=16;ibase=16;"; (echo $line | awk -F "[ *]" '{x=sprintf("%s*%X", $4, $5); print x;}') | sed 's/0x//g' | tr '[:lower:]' '[:upper:]') | bc`
+	addr_proc_map[`echo "obase=10;ibase=16;${proc_table_addr[$line_nr]}" | bc`]=${proc_name[$line_nr]}
+    fi
+done < $1
+
+while read line
+do
+    TITLE_LINE=`echo $line | grep -e "<bochs"`
+    BLAH_LINE=`echo $line | grep -e "bogus+[[:space:]]*112"`
+
+    if [ -n "$TITLE_LINE" ]; then
+	line_nr=`echo $line | awk -F "[ +\*]" '{print $6}'`
+	echo
+	echo "proc_table["$line_nr"]"" -- "${proc_name[$line_nr]}"  (0x"${proc_table_addr[$line_nr]}")"
+    fi
+ 
+   if [ -n "$BLAH_LINE" ]; then
+	field=`echo $line | awk -F " " '{print $6}' | sed 's/0x0*//' | tr '[:lower:]' '[:upper:]'`
+	if [ -z "$field" ]; then
+	    field="0"
+	    val=""
+	fi
+	if [ "$field" == "2" ]; then
+	    val="SENDING"
+	elif [ "$field" == "4" ]; then
+	    val="RECEIVING"
+	elif [ "$field" == "10" ]; then
+	    val="FREE_SLOT"
+	else
+	    val="???"
+	fi
+	echo -e "\tp_flags       : "$val" (0x"$field")"
+
+	field=`echo $line | awk -F " " '{print $7}' | sed 's/0x0*//' | tr '[:lower:]' '[:upper:]'`
+	if [ -z "$field" ]; then
+	    field="0"
+	fi
+	echo -e "\tp_msg         : 0x"$field
+
+	read line
+
+	field=`echo $line | awk -F " " '{print $4}' | sed 's/0x0*//' | tr '[:lower:]' '[:upper:]'`
+	#echo "debugging: line:"$line
+	if [ -z "$field" ]; then
+	    field="0"
+	fi
+	if [ "$field" == "$ANY" ]; then
+	    val="ANY"
+	elif [ "$field" == "$NO_TASK" ]; then
+	    val="NO_TASK"
+	else
+	    val=${proc_name[$field]}
+	fi
+	if [ -z "$val" ]; then
+	    val="!! unrecognized pid !!"
+	fi
+	echo -e "\tp_recvfrom    : "$val" (0x"$field")"
+
+	field=`echo $line | awk -F " " '{print $5}' | sed 's/0x0*//'| tr '[:lower:]' '[:upper:]'`
+	if [ -z "$field" ]; then
+	    field="0"
+	    val=""
+	fi
+	if [ "$field" == "$ANY" ]; then
+	    val="ANY"
+	elif [ "$field" == "$NO_TASK" ]; then
+	    val="NO_TASK"
+	else
+	    val=${proc_name[$field]}
+	fi
+	if [ -z "$val" ]; then
+	    val="!! unrecognized pid !!"
+	fi
+	echo -e "\tp_sendto      : "$val" (0x"$field")"
+
+	field=`echo $line | awk -F " " '{print $6}' | sed 's/0x0*//'| tr '[:lower:]' '[:upper:]'`
+	if [ -z "$field" ]; then
+	    field="0"
+	    val="no"
+	else
+	    val="yes"
+	fi
+	echo -e "\thas_intmsg    : "$val" (0x"$field")"
+
+	field=`echo $line | awk -F " " '{print $7}' | tr '[:lower:]' '[:upper:]' | sed 's/0X0*/0x/'`
+	if [ "$field" == "0x" ]; then
+	    field="0"
+	    val="NULL"
+	else
+	    val=${addr_proc_map[`echo "obase=10;ibase=16;\`echo $field | sed 's/^0x//g'\`;" | bc`]}
+	fi
+	echo -e "\tq_sending     : "$val" ("$field")"
+
+	read line
+
+	field=`echo $line | awk -F " " '{print $4}' | sed 's/0x0*//'| tr '[:lower:]' '[:upper:]'`
+	if [ -z "$field" ]; then
+	    field="0"
+	    val="NULL"
+	else
+	    val=${addr_proc_map[`echo "obase=10;ibase=16;\`echo $field | sed 's/^0x//g'\`;" | bc`]}
+	fi
+	echo -e "\tnext_sending  : "$val" (0x"$field")"
+    fi
+done < $1
+
+exit 0
